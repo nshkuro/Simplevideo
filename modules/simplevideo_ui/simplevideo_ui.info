@@ -1,0 +1,5 @@
+name = SimpleVideo UI
+description = simplevideo User Interface.
+package = simplevideo
+core = 6.x
+dependencies[] = simplevideo

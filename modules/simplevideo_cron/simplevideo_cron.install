@@ -1,0 +1,59 @@
+<?php
+/**
+ * Implementation of hook_install()
+ */
+function simplevideo_cron_install() {
+  drupal_install_schema('simplevideo_cron');
+}
+
+/**
+ * Implementation of hook_uninstall()
+ */
+function simplevideo_cron_uninstall() {
+  drupal_uninstall_schema('simplevideo_cron');
+}
+
+function simplevideo_cron_schema() {
+   $schema['simplevideo_cron'] = array(
+    'fields' => array(
+      'cronid' => array(
+        'description' => t('The primary identifier for an simplevideo_cron.'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'filepath' => array(
+        'description' => t('Original file path'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+       'command' => array(
+        'description' => t('Command to perform.'),
+        'type' => 'text',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+       'processed' => array(
+        'description' => t('TRUE if the following.'),
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'time_created' => array(
+        'decription' => t('Time created job'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'time_processed' => array(
+        'decription' => t('Time processed job'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('cronid'),
+  );
+  return $schema;
+}

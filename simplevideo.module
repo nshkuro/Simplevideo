@@ -1,0 +1,1110 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * General simplevideo module, Convert video,
+ * generate preview, perform basic queries in the database.
+ */
+
+/**
+ * Implementation of hook_perm().
+ */
+function simplevideo_perm() {
+  $perms =  array('administer simplevideo');
+  foreach (simplevideo_presets() as $preset) {
+    $perms[] =  'view simplevideo '. $preset;
+  }
+  return $perms;
+}
+
+/**
+ * Implementation of hook_menu()
+ */
+function simplevideo_menu() {
+  $items = array();
+  $items['admin/build/simplevideo/general'] = array(
+    'title' => 'Simplevideo general settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('simplevideo_ffmpeg_form'),
+    'access arguments' => array('administer simplevideo'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+function simplevideo_ffmpeg_form($form_state) {
+  $form = array();
+  $form['ffmpeg'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Path to FFMpeg'),
+      '#description' => t('if necessary, specify the path to ffmpeg'),
+      '#default_value' => variable_get('ffmpeg', ''),
+  );
+  return system_settings_form($form);
+}
+
+/**
+ * @return <array> list of all presets
+ */
+function simplevideo_presets() {
+  static $cache = array();
+  if (isset($cache['presets'])) {
+    return $cache['presets'];
+  }
+  $presets = array();
+  $result = db_query("SELECT presetid, presetname, scheduled FROM {simplevideo_preset}");
+  while ($row = db_fetch_array($result)) {
+    $presets[] = $row['presetname'];
+  }
+  $cache['presets'] = $presets;
+  return $presets;
+}
+
+/**
+ * Returns the name of the preset ID
+ *
+ * @param $presetid
+ * @return
+ */
+function simplevideo_get_presetname($presetid) {
+  static $cache = array();
+  if (isset($cache["presetname_$presetid"])) {
+    return $cache["presetname_$presetid"];
+  }
+  $presetname = array();
+  $result = db_query("SELECT presetname FROM {simplevideo_preset} WHERE presetid =%d", $presetid);
+  while ($row = db_fetch_array($result)) {
+    $presetname = $row ['presetname'];
+  }
+  $cache["presetname_$presetid"] = $presetname;
+  return $presetname;
+}
+
+/**
+ * Returns the ID preset name
+ *
+ * @param $presetname
+ * @return
+ * 
+ */
+function simplevideo_get_presetid($presetname) {
+  static $cache = array();
+  if (isset($cache["presetid_$presetname"])) {
+    return $cache["presetid_$presetname"];
+  }
+  $result = db_query("SELECT presetid FROM {simplevideo_preset} WHERE presetname ='%s'", $presetname);
+  while ($row = db_fetch_array($result)) {
+    $presetid = $row['presetid'];
+  }
+  $cache["presetid_$presetname"] = $presetid;
+  return $presetid;
+}
+
+/**
+ * Delete preset by ID
+ *
+ * @param $presetid
+ * 
+ */
+function simplevideo_delete_preset($presetid) {
+  db_query("DELETE FROM {simplevideo_preset} WHERE presetid = %d", $presetid);
+}
+
+/**
+ * Delete player by ID
+ *
+ * @param $presetid
+ * 
+ */
+function simplevideo_delete_player($playerid) {
+  db_query("DELETE FROM {simplevideo_players} WHERE playerid = %d", $playerid);
+}
+
+/**
+ * Save new preset
+ *
+ * @param $preset
+ */
+function simplevideo_preset_save($preset) {
+  db_query("INSERT INTO {simplevideo_preset} (presetname) VALUES ('%s') " , $preset);
+}
+
+/**
+ * Update preset
+ *
+ * @param  $presetid
+ * @param  $run
+ *  type of performance on the crown or now
+ * @param  $presetname
+ *
+ */
+function simplevideo_preset_update($presetid, $run, $presetname) {
+  db_query("UPDATE {simplevideo_preset} SET presetname ='%s', scheduled =%d WHERE presetid =%d", $presetname, $run, $presetid);
+}
+
+/**
+ * Save encoding video action
+ *
+ * @param  $presetid
+ *  preset ID
+ * @param  $width
+ *  width video
+ * @param  $height
+ *  height video
+ * @param  $bitrate
+ *  bitrate video
+ * @param  $a_bitrate
+ *  bitrate audio
+ * @param  $sampling
+ *  audio sampling
+ *
+ */
+function simplevideo_enc_action_save($presetid, $action) {
+  db_query("INSERT INTO {simplevideo_enc_action} (presetid, parameters) VALUES (%d, '%s')", $presetid, $action);
+}
+
+/**
+ * Save create thumbnails action
+ *
+ * @param  $presetid
+ *  preset ID
+ * @param  $width
+ *   width thumbnails
+ * @param  $height
+ *  height thumbnails
+ * @param  $count
+ *  count thumbnails
+ * @param  $time
+ *  start time
+ * @param  $delay
+ *  delay between thumbnails
+ *
+ */
+function simplevideo_thumb_action_save($presetid, $param) {
+  db_query("INSERT INTO {simplevideo_thumb_action} (presetid, parameters) VALUES (%d, '%s')", $presetid, $param);
+}
+
+/**
+ * Delete encoding video action by ID
+ *
+ * @param $actionid
+ *
+ */
+function simplevideo_delete_action_enc($actionid) {
+  db_query("DELETE FROM {simplevideo_enc_action} WHERE actionid = %d", $actionid);
+}
+
+/**
+ * Delete create thumbnails action by ID
+ *
+ * @param $actionid
+ *
+ */
+function simplevideo_delete_action_thumb($actionid) {
+  db_query("DELETE FROM {simplevideo_thumb_action} WHERE actionid = %d", $actionid);
+}
+
+/** 
+ * @param  $playerid
+ * @return array player settings by ID
+ */
+function simplevideo_get_player_settings($playerid) {
+  static $cache = array();
+  if (isset($cache["player_settings_$playerid"])) {
+    return $cache["player_settings_$playerid"];
+  }
+  $player = array();
+  $result = db_query("SELECT path, machinename, personalname, options, parameters FROM {simplevideo_players} WHERE playerid =%d", $playerid);
+  while ($row = db_fetch_array($result)) {
+    $player['path'] = $row['path'];
+    $player['machine_name'] = $row['machinename'];
+    $player['personal_name'] = $row['personalname'];
+    $player['options'] = unserialize($row['options']);
+    $player['parameters'] = unserialize($row['parameters']);
+  }
+  $cache["player_settings_$playerid"] = $player;
+  return $player;
+}
+
+/**
+ * @param  $actionid
+ * @return array encoding settings by ID
+ */
+function simplevideo_get_enc_settings($actionid) {
+  static $cache = array();
+  $array = array();
+  if (isset ($cache["enc_settings_$actionid"])) {
+    return $cache["enc_settings_$actionid"];
+  }
+  $result = db_query("SELECT parameters FROM {simplevideo_enc_action} WHERE actionid = %d", $actionid);
+  while ($row = db_fetch_array($result)) {
+    $row = unserialize($row['parameters']);
+    $array['enc']['width'] = $row['width'];
+    $array['enc']['height'] = $row['height'];
+    $array['enc']['bitrate'] = $row['bitrate'];
+    $array['enc']['a_bitrate'] = $row['a_bitrate'];
+    $array['enc']['sampling'] = $row['sampling'];
+    $array['enc']['format'] = $row['format'];
+    $array['enc']['fps'] = $row['fps'];
+    $array['enc']['start_time'] = $row['start_time'];
+    $array['enc']['duration'] = $row['duration'];
+  }
+  $cache["enc_settings_$actionid"] = $array;
+  return $array;
+}
+
+/**
+ * Update encoding video action
+ *
+ * @param  $presetid
+ *  preset ID
+ * @param  $width
+ *  width video
+ * @param  $height
+ *  height video
+ * @param  $bitrate
+ *  bitrate video
+ * @param  $a_bitrate
+ *  bitrate audio
+ * @param  $sampling
+ *  audio sampling
+ */
+function simplevideo_update_enc_settings($actionid, $action) {
+  db_query("UPDATE {simplevideo_enc_action} SET parameters = '%s' WHERE actionid =%d", $action, $actionid);
+}
+
+/**
+ *
+ * @param  $actionid
+ * @return array create thumbnails settings by ID
+ */
+function simplevideo_get_thumb_settings($actionid) {
+  static $cache = array();
+  if (isset($cache["thumb_settings_$actionid"])) {
+    return  $cache["thumb_settings_$actionid"];
+  }
+  $array = array();
+  $result = db_query("SELECT parameters FROM {simplevideo_thumb_action} WHERE actionid = %d", $actionid);
+  while ($row = db_fetch_array($result)) {
+    $row = unserialize($row['parameters']);
+    $array['thumb']['width'] = $row['width'];
+    $array['thumb']['height'] = $row['height'];
+    $array['thumb']['count'] = $row['count'];
+    $array['thumb']['time'] = $row['seconds'];
+    $array['thumb']['delay'] = $row['delay'];
+  }
+  $cache["thumb_settings_$actionid"] = $array;
+  return $array;
+}
+
+function simplevideo_get_enc_parameters($presetname){
+  static $cache = array();
+  if(isset($cache["settings_$presetname"])){
+    return $cache["settings_$presetname"];
+  }
+  $query = ("SELECT parameters FROM {simplevideo_preset} svp LEFT JOIN {simplevideo_enc_action} svea
+          ON svp.presetid = svea.presetid WHERE svp.presetname = '%s' LIMIT 0, 1");
+  $result = db_query($query, $presetname);
+  while($row = db_fetch_array($result)){
+    $param = $row['parameters'];
+  }
+  $cache["settings_$presetname"] = $param;
+  return $param;
+}
+
+function simplevideo_get_thumb_parameters($presetname){
+  static $cache = array();
+  if(isset($cache["settings_$presetname"])){
+    return $cache["settings_$presetname"];
+  }
+  $query = ("SELECT parameters FROM {simplevideo_preset} svp LEFT JOIN {simplevideo_thumb_action} svta
+          ON svp.presetid = svta.presetid WHERE svp.presetname = '%s' LIMIT 0, 1");
+  $result = db_query($query, $presetname);
+  while($row = db_fetch_array($result)){
+    $param = $row['parameters'];
+  }
+  $cache["settings_$presetname"] = $param;
+  return $param;
+}
+/**
+ *
+ * @return array inclusive encoding settings
+ */
+function simplevideo_get_enc_preset() {
+  static $cache = array();
+  if (isset ($cache['enc_cache'])) {
+    return $cache['enc_cache'];
+  }
+  $preset = array();
+  $result = db_query("SELECT sp.presetid, sp.presetname, parameters FROM {simplevideo_preset} sp
+                      INNER JOIN {simplevideo_enc_action} sea
+                      ON sp.presetid = sea.presetid");
+  while ($row = db_fetch_array($result)) {
+    $param = unserialize($row['parameters']);
+    $preset['presetname'][] = $row['presetname'];
+    $preset['presetid'][] = $row['presetid'];
+    $preset['width'][] = $param['width'];
+    $preset['height'][] = $param['height'];
+    $preset['bitrate'][] = $param['bitrate'];
+  }
+  $cache['enc_preset'] = $preset;
+  return $preset;
+}
+/**
+ *
+ * @return array inclusive thumbnails settings
+ */
+function simplevideo_get_thumb_preset() {
+  static $cache = array();
+  if (isset($cache['thumb_preset'])) {
+    return $cache['thumb_preset'];
+  }
+  $preset = array();
+  $result = db_query("SELECT sp.presetid, sp.presetname, parameters FROM {simplevideo_preset} sp
+                      INNER JOIN {simplevideo_thumb_action} sta
+                      ON sp.presetid = sta.presetid");
+  while ($row = db_fetch_array($result)) {
+    $param = unserialize($row['parameters']);
+    $preset['presetname'][] = $row['presetname'];
+    $preset['presetid'][] = $row['presetid'];
+    $preset['width'][] = $param['width'];
+    $preset['height'][] = $param['height'];
+    $preset['count'][] = $param['count'];
+    $preset['time'][] = $param['seconds'];
+    $preset['delay'][] = $param['delay'];
+  }
+  $cache['thumb_preset'] = $preset;
+/*  print_r($preset);
+  die();*/
+  return $preset;
+}
+
+/**
+ * Update create thumbnails action
+ *
+ * @param  $presetid
+ *  preset ID
+ * @param  $width
+ *   width thumbnails
+ * @param  $height
+ *  height thumbnails
+ * @param  $count
+ *  count thumbnails
+ * @param  $time
+ *  start time
+ * @param  $delay
+ *  delay between thumbnails
+ */
+function simplevideo_update_thumb_settings($actionid, $param) {
+  db_query("UPDATE {simplevideo_thumb_action} SET parameters ='%s' WHERE actionid =%d", $param, $actionid);
+}
+
+/**
+ * Save or update player in database
+ *
+ * @param  $path
+ *  path to player
+ * @param  $machine_name
+ *  machine name formatter
+ * @param  $personal_name
+ *  personal name firmatter
+ * @param  $options
+ *  player options
+ * @param  $param
+ *  parameters player
+ *
+ */
+function simplevideo_save_or_update_players($path, $machine_name, $personal_name, $options, $param, $playerid = NULL){
+  $options = simplevideo_strtolower($options);
+  $param = simplevideo_strtolower($param);
+  $param = serialize($param);
+  $options = serialize($options);
+  if ($playerid){
+    db_query("UPDATE {simplevideo_players} SET path ='%s', machinename ='%s', personalname ='%s', options ='%s', parameters ='%s'  WHERE playerid =%d", $path, $machine_name, $personal_name, $options, $param, $playerid);
+  }
+  else {
+    db_query("INSERT INTO {simplevideo_players}(path, machinename, personalname, options, parameters) VALUES ('%s', '%s', '%s', '%s', '%s')", $path, $machine_name, $personal_name, $options, $param);
+  }
+}
+
+/**
+ *
+ * @param  $presetid
+ * @return 1 if run to cron
+ *         0 if rut to now
+ */
+function simplevideo_get_scheduled($presetid) {
+  static $cache = array();
+  if (isset($cache["scheduled_$presetid"])) {
+    return $cache["scheduled_$presetid"];
+  }
+  $result = db_query("SELECT scheduled FROM {simplevideo_preset} WHERE presetid =%d", $presetid);
+  while ($row = db_fetch_array($result)) {
+    $scheduled = $row['scheduled'];
+  }
+  $cache["scheduled_$presetid"] = $scheduled;
+  return $scheduled;
+}
+
+/**
+ * @return array inclusive all player settings
+ */
+function simplevideo_players() {
+  static $cache = array();
+  if (isset($cache['players'])) {
+    return $cache['players'];
+  }
+  $players = array();
+  $result = db_query("SELECT playerid, path, machinename, personalname, options, parameters FROM {simplevideo_players}");
+  while ($row = db_fetch_array($result)) {
+    $players['playerid'][] = $row['playerid'];
+    $players['path'][] = $row['path'];
+    $players['machinename'][] = $row['machinename'];
+    $players['personalname'][] = $row['personalname'];
+    $players['options'][] = $row['options'];
+    $players['parameters'][] = $row['parameters'];
+  }
+  $cache['players'] = $players;
+  return $players;
+}
+
+/**
+ *
+ * @param  $machinename
+ *  machine name formatter
+ * @return array inclusive player settings
+ */
+function simplevideo_get_player_settings_by_machinename($machinename) {
+  static $cache = array();
+  if (isset($cache["settings_$machinename"])) {
+    return $cache["settings_$machinename"];
+  }
+  $settings = array();
+  $result = db_query("SELECT playerid, path, personalname, options, parameters FROM {simplevideo_players} WHERE machinename ='%s'", $machinename);
+  while ($row = db_fetch_array($result)) {
+    $settings['playerid'] = $row['playerid'];
+    $settings['path'] = $row['path'];
+    $settings['personal_name'] = $row['personalname'];
+    $settings['options'] = unserialize($row['options']);
+    $settings['parameters'] = unserialize($row['parameters']);
+  }
+  $cache["settings_$machinename"] = $settings;
+  return $settings;
+}
+
+/**
+ * callback for handling public files simplevideo requests.
+ */
+function simplevideo_cache() {
+  $args = func_get_args();
+  $preset = check_plain(array_shift($args));
+  $path = implode('/', $args);
+  _simplevideo_cache($preset, $path);
+}
+
+/**
+ * Implementation of hook_theme().
+ */
+function simplevideo_theme() {
+  $theme = array();
+  $players = simplevideo_players();
+  $player_machinename = $players['machinename'];
+  if (!empty($player_machinename)) {
+    foreach ($player_machinename as $player) {
+      $theme['simplevideo_formatter_'. $player] = array(
+          'arguments' => array('element' => NULL),
+          'function' => 'theme_simplevideo_formatter_default',
+      );
+    }
+  }
+  return $theme;
+}
+
+/**
+ * Implementation of hook_field_formatter_info().
+ *
+ * simplevideo formatters are named as $playername
+ */
+function simplevideo_field_formatter_info() {
+  $formatters = array();
+  $players = simplevideo_players();
+  $count = count($players['machinename']);
+  $machinename = $players['machinename'];
+  $personalname = $players['personalname'];
+  for ($i = 0; $i < $count; $i++) {
+    $formatters[$machinename[$i]] = array(
+        'label' => t($personalname[$i]),
+        'field types' => array('filefield'),
+        'multiple values' => CONTENT_HANDLE_CORE,
+    );
+  }
+  return $formatters;
+}
+
+
+function theme_simplevideo_formatter_default($element) {
+  $item = $element['#item'];
+  //if (!empty($item['filename'])) {
+  if (!empty($item['filepath'])) {
+    $filepath = $item['filepath'];
+    $formatter = $element['#formatter'];
+    $settings = simplevideo_get_player_settings_by_machinename($formatter);
+    $url = $settings['path'];
+    $options = $settings['options'];
+    $number = simplevideo_get_number_thumb($options);
+    $parameters = $settings['parameters'];
+    $vars = array();
+    $params = array();
+    $object = array();
+    $object['filename'] = $filepath;
+    $object['number'] = $number; // number thumbnails
+    foreach ($options as $value) {
+      if (!empty($value['value']) && !empty($value['value'])) {
+        $array = explode('-', $value['value']); //divide the name and index
+        $replace = $array[0]; //name
+        if (count($array) > 1) { //if the index was
+          $replace = $array[0] .']'; // add special symbol for tokens
+        }
+        $vars[$value['key']] = token_replace($replace, $type = 'simplevideo', $object, $leading = '[', $trailing = ']', $options = array());
+      }
+    }
+
+    foreach ($parameters as $value) {
+      if (!empty($value['value']) && !empty($value['value'])) {
+        $params[$value['key']] = $value['value'];
+      }
+    }
+    return theme("swfobject_api", $url, $params, $vars);
+  }
+}
+
+/**
+ * Encoding video file
+ *
+ * @param $input
+ *  input file
+ * @param $output
+ *  output file
+ * @param $bitrate
+ *  bitrate video
+ * @param $width
+ *  width video
+ * @param $height
+ *  height video
+ * @param $a_bitrate
+ *  bitrate audio
+ * @param $sampling
+ *  audio sampling
+ */
+function simplevideo_encoding_file($input, $output, $enc_settings) {
+  $path = simplevideo_get_ffmpeg_path();
+  $command = simplevideo_create_enc_command($path, $input, $output, $enc_settings);
+  exec($command);
+}
+/**
+ * Create thumbnails
+ *
+ * @param $input
+ *  input file
+ * @param $position
+ *  start position
+ * @param $width
+ *  width thumbnails
+ * @param $height
+ *  height thumbnails
+ * @param $filename
+ *  name input file
+ */
+function simplevideo_thumbnails_generation($input, $position, $width, $height, $filename) {
+  $path = simplevideo_get_ffmpeg_path();
+  $command = simplevideo_create_thumb_command($path, $input, $position, $width, $height, $filename);
+  exec($command);
+}
+/**
+ * Create command for encoding file
+ *
+ * @param $path
+ *  path to ffmpeg
+ * @param $input
+ *  input file
+ * @param $output
+ *  output file
+ * @param $bitrate
+ *  bitrate video
+ * @param $width
+ *  width video
+ * @param $height
+ *  height video
+ * @param $a_bitrate
+ *  bitrate audio
+ * @param $sampling
+ *  sampling audio
+ * @return string $command
+ */
+  function simplevideo_create_enc_command($path, $input, $output, $enc_settings){
+  $enc_settings = unserialize($enc_settings);
+  $a_bitrate = escapeshellarg($enc_settings['a_bitrate']);
+  $sampling = escapeshellarg($enc_settings['sampling']);
+  $bitrate = escapeshellarg($enc_settings['bitrate']);
+  $width = escapeshellarg($enc_settings['width']);
+  $height = escapeshellarg($enc_settings['height']);
+  $start_time = $enc_settings['start_time'];
+  $duration = $enc_settings['duration'];
+  $fps = $enc_settings['fps'];
+  $format = $enc_settings['format'];
+  if($duration){
+    $seconds = simplevideo_time_to_seconds($duration);
+    $vframes = ' -vframes '.$fps * $seconds;
+  }else{
+    $vframes = '';
+  }
+  if($start_time){
+    $start_time = ' -ss '. $start_time;
+  }else{
+    $start_time = '';
+  }
+  if($format == 0){
+    $command = $path .' -i '. escapeshellarg($input). $start_time  .' -ab '. $a_bitrate .' -ar '. $sampling .' -b '. $bitrate .'k -r '. $fps . $vframes .' -s '. $width .'x'. $height .' -f flv '. escapeshellarg($output);
+  }
+  if($format == 1){
+    $codec = ' -vcodec libx264 ';
+    $thead = ' -threads 0 ';
+    $command = $path .' -i '. escapeshellarg($input) . $start_time . $codec . $thead .' -ab '. $a_bitrate .' -ar '. $sampling .' -b '. $bitrate .'k -r '. $fps . $vframes .' -s '. $width .'x'. $height .' '. escapeshellarg($output);
+  }
+  return $command;
+}
+
+/**
+ *  Create command for create thumbnails
+ *
+ * @param $path
+ *  path to ffmpeg
+ * @param $input
+ *  input file
+ * @param $position
+ *  start position
+ * @param $width
+ *  width thumbnails
+ * @param $height
+ *  height thumbnails
+ * @param $filename
+ *  name file
+ * @return string $command
+ *
+ */
+function simplevideo_create_thumb_command($path, $input, $position, $width, $height, $filename){
+  $command = ($path .' -i '. escapeshellarg($input) .' -an -ss '. escapeshellarg($position) .' -vframes 1 -s '. escapeshellarg($width) .'x'. escapeshellarg($height) .' -y -f mjpeg '. escapeshellarg($filename));
+  return $command;
+}
+
+/**
+ * function returns the existing objects, if the objects do not exist, it creates them
+ *
+ * @param  $preset
+ *  name preset
+ * @param  $path
+ *  path to file
+ *
+ */
+function _simplevideo_cache($preset, $path) {
+  $input = $path;
+  $output = urldecode(simplevideo_create_path($preset, $path));
+  $enc_settings = simplevideo_get_enc_parameters($preset);
+// if not empty, then video preset
+  if (!empty($enc_settings)) {
+    // file do not exist
+    if (!file_exists($output)) {
+      $dir_simplevideo = file_directory_path() .'/simplevideo/';
+      $dir_simplevideo_presets = file_directory_path() .'/simplevideo/'. $preset;
+      simplevideo_create_directory_path($path, $dir_simplevideo_presets);
+      file_check_directory($dir_simplevideo, FILE_CREATE_DIRECTORY);
+      file_check_directory($dir_simplevideo_presets, FILE_CREATE_DIRECTORY);
+      $presetid = simplevideo_get_presetid($preset);
+      $scheduled = simplevideo_get_scheduled($presetid);
+      // run to cron?
+      if (module_exists('simplevideo_cron') && $scheduled == 1) {
+        $command = simplevideo_cron_get_command();
+        $path = simplevideo_get_ffmpeg_path();
+        $new_command = simplevideo_create_enc_command($path, $input, $output, $enc_settings);
+        // if this command exist do not save to database
+        if (array_search($new_command, $command) === FALSE) {
+          simplevideo_cron_add_job_video($input, $output, $enc_settings);
+        }
+      }
+      else {
+        simplevideo_encoding_file($input, $output, $enc_settings);
+      }
+    }
+  }
+  // if thumbnails preset
+  else {
+    $input = $path;
+    $thumb_settings = simplevideo_get_thumb_parameters($preset);
+    $thumb_settings = unserialize($thumb_settings);
+    $width = $thumb_settings['width'];
+    $height = $thumb_settings['height'];
+    $count = $thumb_settings['count'];
+    $time = simplevideo_time_to_seconds($thumb_settings['seconds']);
+    $delay = $thumb_settings['delay'];
+    $output = urldecode(simplevideo_create_path_thumb($preset, $path, 0));
+    // file do not exist
+    if (!file_exists($output)) {
+      $dir_simplevideo = file_directory_path() .'/simplevideo/';
+      $dir_simplevideo_presets = file_directory_path() .'/simplevideo/'. $preset;
+      file_check_directory($dir_simplevideo, FILE_CREATE_DIRECTORY);
+      file_check_directory($dir_simplevideo_presets, FILE_CREATE_DIRECTORY);
+      $presetid = simplevideo_get_presetid($preset);
+      $scheduled = simplevideo_get_scheduled($presetid);
+      // run to cron?
+      if (module_exists('simplevideo_cron') && $scheduled == 1) {
+        $command = simplevideo_cron_get_command();
+        for ($i = 0; $i<=$count; $i++) {
+          $old_path = $path;
+          $dir_simplevideo_presets_thumb = simplevideo_create_path_thumb($preset, $path, $i);
+          $dir_simplevideo_presets_thumb_number = str_replace($path, "", $dir_simplevideo_presets_thumb);
+          $path = simplevideo_get_ffmpeg_path();
+          $new_command = simplevideo_create_thumb_command($path, $input, $time, $width, $height, $dir_simplevideo_presets_thumb);
+          // if this command exist do not save to database
+          $exist = array_search($new_command, $command);
+          if ($exist === FALSE) {
+            file_check_directory($dir_simplevideo_presets_thumb_number, FILE_CREATE_DIRECTORY);
+            simplevideo_create_directory_path($old_path, $dir_simplevideo_presets_thumb_number);
+            simplevideo_cron_add_job_thumb($input, $time, $width, $height, $dir_simplevideo_presets_thumb);
+          }
+          $time = $time + $delay;
+        }
+      }
+      else {
+        //run now
+        for ($i = 0; $i<=$count; $i++) {
+          $dir_simplevideo_presets_thumb = simplevideo_create_path_thumb($preset, $path, $i);
+          $dir_simplevideo_presets_thumb_number = str_replace($path, "", $dir_simplevideo_presets_thumb);
+          file_check_directory($dir_simplevideo_presets_thumb_number, FILE_CREATE_DIRECTORY);
+          simplevideo_create_directory_path($path, $dir_simplevideo_presets_thumb_number);
+          simplevideo_thumbnails_generation($input, $time, $width, $height, $dir_simplevideo_presets_thumb);
+          $time = $time + $delay;
+        }
+      }
+    }
+  }
+}
+
+/**
+ *
+ * @param <type> $preset
+ *  preset name
+ * @param <type> $file
+ *  filename
+ * @param <type> $i
+ *  number thumbnails
+ * @return string path to thumbnails
+ */
+function simplevideo_create_path_thumb($preset, $file, $i) {
+  $path = file_directory_path() .'/simplevideo/'. $preset .'/'. $i .'/'. $file;
+  return $path;
+}
+
+/**
+ * trimmed once a symbol
+ *
+ * @param $path
+ *  path to file
+ * @return string new path
+ *
+ */
+function simplevideo_strip_directory($path) {
+  $path = explode("/", $path);
+  array_shift($path);
+  $path = implode("/", $path);
+  return $path;
+}
+
+/**
+ *
+ * @param $preset
+ *  preset name
+ * @param $path
+ *  filename
+ * @return string path to file
+ */
+function simplevideo_create_path($preset, $path) {
+  $path = file_directory_path() .'/simplevideo/'. $preset .'/'. $path;
+  return $path;
+}
+
+/**
+ *
+ * @param $preset
+ *  presetname
+ * @param $path
+ *  file name
+ * @return string path to file
+ */
+function simplevideo_create_url($preset, $path) {
+  return  base_path() . file_directory_path() .'/simplevideo/'. $preset .'/'. $path;
+}
+
+/**
+ *
+ * @param $preset
+ *  presetname
+ * @param $path
+ *  filename
+ * @param $number
+ *  number thumbnails
+ * @return string path to file
+ */
+function simplevideo_create_url_thumb($preset, $path, $number) {
+  return  base_path() . file_directory_path() .'/simplevideo/'. $preset .'/'. $number .'/'. $path;
+}
+
+/**
+ * Implementation of hook_token_list().
+ */
+function simplevideo_token_list($type = 'all') {
+  if ($type == 'simplevideo' || $type == 'all') {
+    $presets = simplevideo_get_enc_preset();
+    $count = count($presets['presetid']);
+    for ($i = 0; $i < $count; $i++) {
+      if (!empty ($presets['presetid'][$i])) {
+        $width = $presets['width'][$i];
+        $height = $presets['height'][$i];
+        $bitrate = $presets['bitrate'][$i];
+        $tokens['simplevideo'][$presets['presetname'][$i]]  = t("Encoding video: Resolution: $width x $height, Bitrate: $bitrate  kbits/sec");
+      }
+    }
+    $presets = simplevideo_get_thumb_preset();
+    $count = count($presets['presetid']);
+    for ($i = 0; $i < $count; $i++) {
+      if (!empty($presets['presetid'][$i])) {
+        $width = $presets['width'][$i];
+        $height = $presets['height'][$i];
+        $count = $presets['count'][$i];
+        $time = $presets['time'][$i];
+        $delay = $presets['delay'][$i];
+        $tokens['simplevideo'][$presets['presetname'][$i]]  = t("Create thumbnails: Resolution: $width x $height, Count: $count, Start time: $time sec, Delay: $delay");
+      }
+    }
+  }
+  return $tokens;
+}
+
+/**
+ * Implementation of hook_token_values().
+ */
+function simplevideo_token_values($type, $object = NULL) {
+  $values = array();
+  switch ($type) {
+    case 'simplevideo':
+      $presets = simplevideo_get_thumb_preset();
+      $presets = $presets['presetname'];
+      if (!$object['number']){
+        $object['number'] = 0;
+      }
+      if (!empty($presets)) {
+        foreach ($presets as $preset) {
+          $values[$preset]  = base_path() . file_directory_path() .'/simplevideo/'. $preset .'/'. $object['number'] .'/'. $object['filename'];
+        }
+      }
+      $presets = simplevideo_get_enc_preset();
+      $presets = $presets['presetname'];
+      foreach ($presets as $preset) {
+        $values[$preset]  = base_path() . file_directory_path() .'/simplevideo/'. $preset .'/'. $object['filename'];
+      }
+      break;
+  }
+  return $values;
+}
+
+/**
+ * Clear cache formatters after save players
+ */
+function simplevideo_cache_clear() {
+  cache_clear_all('content_type_info', 'cache_content');
+}
+
+/**
+ *
+ * @return string path to ffmpeg
+ */
+function simplevideo_get_ffmpeg_path(){
+  $path = variable_get('ffmpeg', '');
+  if ($path === '') {
+    $path = 'ffmpeg';
+  }
+  else {
+    $path = $path;
+  }
+  return $path;
+}
+
+/*
+ * strtolower var and param players
+ *
+ * @param $array <array> input array string.
+ * @return $array - result
+ */
+function simplevideo_strtolower($array){
+  $count = count($array);
+  for ($i = 0; $i < $count; $i++){
+    $array[$i]['key'] = drupal_strtolower($array[$i]['key']);
+    $array[$i]['value'] = drupal_strtolower($array[$i]['value']);
+  }
+  return $array;
+}
+
+/**
+ *
+ * @param <array> $vars
+ * varaiables array
+ * @return <int>  $number
+ * number thumbnails
+ */
+function simplevideo_get_number_thumb($vars) {
+  $presets = simplevideo_get_thumb_preset();
+  $presets = $presets['presetname'];
+  foreach ($vars as $value) {
+    foreach ($presets as $name) {
+      $var = $value['value'];
+      if(substr_count($var, $name) == 1) {
+        $var = explode('-', $var);
+        $number = $var[1];
+        $number = str_replace(']', '', $number);
+      }
+    }
+  }
+  return $number;
+}
+
+function simplevideo_create_directory_path($path, $dir){
+  $array_path = array();
+  $array_path = explode("/", $path);
+  array_pop($array_path);
+  $count = count($array_path);
+  for($i = 0; $i < $count; $i++){
+    $dir = $dir ."/". $array_path[$i];
+    file_check_directory($dir, FILE_CREATE_DIRECTORY);
+  }
+}
+                                              
+/*
+ * Implementation hook_nodeapi
+ */
+function simplevideo_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  if($op == 'insert' || $op == 'update') {
+    $cache = cache_get('field_formatter');
+    if(!$cache) {
+      $video_formatters = simplevideo_formatters();
+      $all_formatters =  simplevideo_content_get_all_formatters();
+      $result = array();
+      foreach($video_formatters as $video_formatter) {
+        foreach($all_formatters as $key => $value) {
+          if($value['formatter'] == $video_formatter) {
+            $result[] = array($value['name'] => $video_formatter);
+          }
+        }
+      }
+      cache_set('field_formatter', $result);
+      $cache = cache_get('field_formatter');
+    }
+      $node_array = get_object_vars($node);
+      foreach ($cache->data as $key => $value) {
+        $video_fields =  array_intersect_key($node_array, $value);
+        foreach ($video_fields as $field => $video){
+          $path = $video['0']['filepath'];
+          $formatter = $value[$field];
+          $presets = simplevideo_get_preset_by_formatter($formatter);
+          foreach($presets as $preset){
+            $preset =($preset['presetname']);
+            _simplevideo_cache($preset, $path);
+          }
+        }
+      }
+  }
+}
+/**
+ * @return array All formatters
+ */
+function simplevideo_formatters(){
+  $players = simplevideo_players();
+  $formatters = array();
+  foreach ($players['machinename'] as $key => $value){
+    $formatters[] = $value;
+  }
+  return $formatters;
+}
+
+function simplevideo_content_get_all_formatters() {
+  $fields = content_fields();
+  foreach ($fields as $key => $value) {
+    $field_formatter[] = array('name' => $key, 'formatter' => $value['display_settings']['full']['format']);
+  }
+  return $field_formatter;
+}
+
+/**
+ * @param  $formatter Formatter machinename
+ * @return array Presets
+ */
+function simplevideo_get_preset_by_formatter($formatter){
+  $array = array();
+  $result = db_query("SELECT sp.options FROM {simplevideo_players} sp WHERE machinename ='%s'", $formatter);
+  while($row = db_fetch_array($result)){
+    $options = unserialize($row['options']);
+  }
+  foreach ($options as $key => $value){
+    $preset = trim($value['value'], '][');
+    $presetid = simplevideo_get_presetid($preset);
+    if($presetid){
+      $array[] = array('presetid' => $presetid, 'presetname' => $preset);
+    }
+  }
+  return $array;
+}
+
+/**
+ * Clone formatters
+ */
+function simplevideo_clone($form, &$form_state) {
+  $id = $form_state['values']['id'];
+  $type = $form_state['values']['type'];
+  $machine_name = $form_state['values']['new_machinename'];
+  $personal_name = $form_state['values']['new_personalname'];
+  $player = simplevideo_get_player_settings($id);
+  $path = $player['path'];
+  $options = $player['options'];
+  $param = $player['parameters'];
+  simplevideo_save_or_update_players($path, $machine_name, $personal_name, $options, $param, $playerid = NULL);
+}
+
+/**
+ * @param  $presetid
+ * @return array  Presets settings
+ */
+function simplevideo_get_preset($presetid){
+  $preset = array();
+  $query = ("SELECT presetid, presetname, scheduled FROM {simplevideo_preset} WHERE presetid = %d");
+  $result = db_query($query, $presetid);
+  while($array = db_fetch_array($result)){
+    $preset['presetid'] = $array['presetid'];
+    $preset['presetname'] = $array['presetname'];
+    $preset['scheduled'] = $array['scheduled'];
+  }
+  return $preset;
+}
+/**
+ * Convert time to seconds
+ *
+ * @param  $time
+ * @return int Seconds
+ */
+function simplevideo_time_to_seconds($time){
+  $regexp = ('/^([0-2]?(?<=[0-2]{1})[0-3]{1}|[0-2]? (?<=[0-1]{1})\d{1}):([0-5]{1}\d{1})(?:\:(?=\d{1})([0-5]{1}(?<=\d{1})\d{1}))?$/');
+  preg_match($regexp, $time, $matches);
+  $hh = $matches[1];
+  $mm = $matches[2];
+  $ss = $matches[3];
+  $seconds = ($hh * 3600) + ($mm * 60) + ($ss);
+  return $seconds;
+}

@@ -1,0 +1,145 @@
+<?php
+// $Id$ 
+
+/**
+ * @file 
+ */
+
+/**
+ * Implementation of hook_install() 
+ */
+function simplevideo_install() {
+  drupal_install_schema('simplevideo');
+}
+
+/**
+ * Implementation of hook_uninstall() 
+ */
+function simplevideo_uninstall() {
+  drupal_uninstall_schema('simplevideo');
+}
+
+function simplevideo_schema() {
+   $schema['simplevideo_preset'] = array(
+    'fields' => array(
+      'presetid' => array(
+        'description' => t('The primary identifier for an simplevideo_preset.'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'presetname' => array(
+        'description' => t('The primary identifier for a node.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'scheduled' => array(
+        'description' => t('Implementation schedule'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('presetid'),
+  );
+
+  $schema['simplevideo_enc_action'] = array(
+    'fields' => array(
+      'actionid' => array(
+        'description' => t('The primary identifier for an simplevideo_enc_action.'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'presetid' => array(
+        'description' => t('The primary identifier for an simplevideo_preset.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'parameters' => array(
+        'description' => t('Action parameters.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('actionid'),
+    'indexes' => array(
+      'presetid' => array('presetid'),
+    ),
+  );
+
+$schema['simplevideo_thumb_action'] = array(
+    'fields' => array(
+      'actionid' => array(
+        'description' => t('The primary identifier for an simplevideo_thumb_action.'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'presetid' => array(
+        'description' => t('The primary identifier for an simplevideo_preset.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'parameters' => array(
+        'description' => t('Action parameters.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('actionid'),
+    'indexes' => array(
+      'presetid' => array('presetid'),
+    ),
+  );
+
+  $schema['simplevideo_players'] = array(
+    'fields' => array(
+      'playerid' => array(
+        'description' => t('The primary identifier for an simplevideo_players.'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'path' => array(
+        'description' => t('File player path.'),
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'machinename' => array(
+        'description' => t('Formatter machine name.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'personalname' => array(
+        'description' => t('Formatter personal name.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'options' => array(
+        'description' => t('Player options.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
+      'parameters' => array(
+        'description' => t('Player parameters.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('playerid'),
+  );
+  return $schema;
+}

@@ -1,0 +1,9 @@
+; $Id$ 
+name = SimpleVideo
+description = Defines an video field type.
+dependencies[] = content
+dependencies[] = filefield
+dependencies[] = token
+dependencies[] = swfobject_api
+package = simplevideo
+core = 6.x

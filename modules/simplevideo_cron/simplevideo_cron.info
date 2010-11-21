@@ -1,0 +1,5 @@
+name = SimpleVideo Cron
+description = Cron for simplevideo.
+dependencies[] = simplevideo
+package = simplevideo
+core = 6.x

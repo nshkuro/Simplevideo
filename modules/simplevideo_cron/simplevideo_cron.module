@@ -1,0 +1,206 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Allows you to perform operations on cron
+ */
+
+/**
+ * Implementation of hook_menu()
+ */
+function simplevideo_cron_menu() {
+  $items = array();
+  $items['admin/build/simplevideo/reports'] = array(
+      'title' => 'Simplevideo cron',
+      'description' => 'Job list',
+      'page callback' => 'simplevideo_cron_job_list_overview',
+      'access arguments' => array('administer simplevideo'),
+  );
+
+  $items['admin/build/simplevideo/reports/completed'] = array(
+      'title' => 'Completed',
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => -10,
+  );
+
+  $items['admin/build/simplevideo/reports/queued'] = array(
+      'title' => 'Queued jobs',
+      'page callback' => 'simplevideo_cron_queued_job_list_overview',
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ *
+ * @return Current date and time
+ */
+function simplevideo_cron_get_datetime() {
+  $date=date('d-m-Y [H:i:s]');
+  return $date;
+}
+
+/**
+ * Sets flag executed task
+ *
+ * @param $cronid
+ */
+function simplevideo_cron_set_processed($cronid) {
+  db_query("UPDATE {simplevideo_cron} SET processed = 1 WHERE cronid =%d", $cronid);
+}
+
+/**
+ * Save time to database
+ *
+ * @param  $cronid
+ * @param  $time
+ *
+ */
+function simplevideo_cron_set_processed_time($cronid, $time) {
+  db_query("UPDATE {simplevideo_cron} SET time_processed ='%s' WHERE cronid =%d", $time, $cronid);
+}
+
+/**
+ * Save in database task to encoding video
+ *
+ * @param $input
+ *  input file
+ * @param $output
+ *  output file
+ * @param $bitrate
+ *  bitatrate video
+ * @param $width
+ *  width video
+ * @param $height
+ *  heigth video
+ * @param $a_bitrate
+ *   audio bitrate
+ * @param $sampling
+ *  sampling audio
+ *
+ */
+function simplevideo_cron_add_job_video($input, $output, $enc_settings) {
+  $path = simplevideo_get_ffmpeg_path();
+  $command = simplevideo_create_enc_command($path, $input, $output, $enc_settings);
+  $time_created = simplevideo_cron_get_datetime();
+  $time_procesed = "0";
+  $filepath = $input;
+  $processed = 0;
+  db_query("INSERT INTO {simplevideo_cron} (filepath, command, processed, time_created, time_processed) VALUES ('%s', '%s', %d, '%s', '%s')", $filepath, $command, $processed, $time_created, $time_procesed);
+}
+
+/**
+ * Save in database task to create thumbnails
+ *
+ * @param  $input
+ *  input file
+ * @param  $time
+ *  start time
+ * @param  $width
+ *  width thumbnails
+ * @param  $height
+ *  heigth thumbnails
+ * @param  $dir_simplevideo_presets_thumb
+ *    path to file
+ *
+ */
+function simplevideo_cron_add_job_thumb($input, $time, $width, $height, $dir_simplevideo_presets_thumb) {
+  $path = simplevideo_get_ffmpeg_path();
+  $command = simplevideo_create_thumb_command($path, $input, $time, $width, $height, $dir_simplevideo_presets_thumb);
+  $time_created = simplevideo_cron_get_datetime();
+  $time_procesed = "0";
+  $filepath = $input;
+  $processed = 0;
+  db_query("INSERT INTO {simplevideo_cron} (filepath, command, processed, time_created, time_processed) VALUES ('%s', '%s', %d, '%s', '%s')", $filepath, $command, $processed, $time_created, $time_procesed);
+}
+
+/**
+ * Implementation of hook_cron().
+ */
+function simplevideo_cron_cron() {
+  $limit = variable_get('cron_limit', 10);
+  $result = db_query("SELECT command, cronid FROM {simplevideo_cron} WHERE processed = 0 LIMIT %d", $limit);
+  while ($row = db_fetch_array($result)) {
+    $command = $row['command'];
+    $cronid = $row['cronid'];
+    $error = array();
+    exec($command, $error);
+    $time = simplevideo_cron_get_datetime();
+    simplevideo_cron_set_processed($cronid);
+    simplevideo_cron_set_processed_time($cronid, $time);
+    }                                                                           
+}
+
+/**
+ * list executed task
+ */
+function simplevideo_cron_job_list_overview() {
+  $count_per_page = 30;
+  $header = array(t('Path to file'), t('Command'), t('Time created'), t('Time processed'));
+  $result = pager_query(db_rewrite_sql("SELECT filepath, command, time_created, time_processed FROM {simplevideo_cron} WHERE processed = 1"), $count_per_page);
+  $rows = array();
+  while ($jobs = db_fetch_array($result)) {
+    $row = array();
+    $row[] = $jobs['filepath'];
+    $row[] = $jobs['command'];
+    $row[] = $jobs['time_created'];
+    $row[] = $jobs['time_processed'];
+    $rows[] = $row;
+  }
+  $output = '';
+  $output .= theme('table', $header, $rows);
+  $output .= theme('pager', NULL, $count_per_page);
+  return $output;
+}
+
+/**
+ * list queued_job
+ */
+function simplevideo_cron_queued_job_list_overview() {
+  $count_per_page = 30;
+  $header = array(t('Path to file'), t('Command'), t('Time created'));
+  $result = pager_query(db_rewrite_sql("SELECT filepath, command, time_created FROM {simplevideo_cron} WHERE processed = 0"), $count_per_page);
+  $rows = array();
+  while ($job = db_fetch_array($result)) {
+    $row = array();
+    $row[] = $job['filepath'];
+    $row[] = $job['command'];
+    $row[] = $job['time_created'];
+    $rows[] = $row;
+  }
+  $output = '';
+  $output .= theme('table', $header, $rows);
+  $output .= theme('pager', NULL, $count_per_page);
+  return $output;
+}
+
+/**
+ *
+ * @return array all command
+ */
+function simplevideo_cron_get_command() {
+  $command = array();
+  $result = db_query("SELECT command FROM {simplevideo_cron}");
+  while ($row = db_fetch_array($result)) {
+    $command[] = $row['command'];
+  }
+  return $command;
+ }
+
+/**
+ * Implementation of hook_form_alter()
+ */
+function simplevideo_cron_form_alter(&$form, $form_state, $form_id) {
+  if ($form_id == 'simplevideo_ffmpeg_form') {
+    $form['cron_limit'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Cron limit'),
+      '#description' => t('Number of tasks for one execution of cron'),
+      '#default_value' => variable_get('cron_limit', 0),
+      '#weight' => 0,
+    );
+  }
+}

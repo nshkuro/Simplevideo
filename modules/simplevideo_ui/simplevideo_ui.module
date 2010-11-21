@@ -1,0 +1,158 @@
+<?php
+
+// $Id$
+
+/**
+ * @file
+ * User interface form administer simplevideo.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function simplevideo_ui_menu() {
+  $items = array();
+  $items['admin/build/simplevideo'] = array(
+      'title' => 'SimpleVideo',
+      'file' => 'simplevideo_ui.pages.inc',
+      'description' => 'Administer simplevideo presets and actions.',
+      'page callback' => 'simplevideo_ui_preset_overview',
+      'access arguments' => array('administer simplevideo'),
+  );
+  $items['admin/build/simplevideo/list'] = array(
+      'title' => 'Preset list',
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => -10,
+  );
+  $items['admin/build/simplevideo/add'] = array(
+      'title' => 'Add new preset',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_preset_form'),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/build/simplevideo/players'] = array(
+      'title' => 'Add player',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'simplevideo_ui_players_callback',
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/build/simplevideo/playerslist'] = array(
+      'title' => 'Players list',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'simplevideo_ui_players_overview',
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/build/simplevideo/playerslist/%'] = array(
+      'title' => 'Edit',
+      'page callback' => 'simplevideo_ui_players_callback',
+      'page arguments' => array(4),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+      'file' => 'simplevideo_ui.pages.inc',
+  );
+  $items['admin/build/simplevideo/playerslist/%/delete'] = array(
+      'title' => 'Edit',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_player_delete_form', 4),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+      'file' => 'simplevideo_ui.pages.inc',
+  );
+  $items['admin/build/simplevideo/%'] = array(
+      'title' => 'Edit',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_preset_actions_form', 3),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+      'file' => 'simplevideo_ui.pages.inc',
+  );
+  $items['admin/build/simplevideo/%/delete'] = array(
+      'title' => 'Delete',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_preset_delete_form', 3),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+      'file' => 'simplevideo_ui.pages.inc',
+  );
+  $items['admin/build/simplevideo/%/add/encoding'] = array(
+      'title' => 'Actions',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_encoding_form', 3),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/build/simplevideo/%/add/thumbnails'] = array(
+      'title' => 'Actions',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_thumbnails_form', 3),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/build/simplevideo/%/enc/%/delete'] = array(
+      'title' => 'Delete',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_action_enc_delete_form', 3, 5),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/build/simplevideo/%/thumb/%/delete'] = array(
+      'title' => 'Delete',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_action_thumb_delete_form', 3, 5),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/build/simplevideo/%/enc/%'] = array(
+      'title' => 'Configure',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_encoding_form', 3, 5),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/build/simplevideo/%/thumb/%'] = array(
+      'title' => 'Configure',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('simplevideo_ui_thumbnails_form', 3, 5),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['simplevideo/js/%'] = array(
+      'title' => 'Javascript Choice Form',
+      'file' => 'simplevideo_ui.pages.inc',
+      'page callback' => 'simplevideo_ui_choice_js',
+      'page arguments' => array(2),
+      'access arguments' => array('administer simplevideo'),
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/build/simplevideo/playerslist/%/clone'] = array(
+    'title' => t('Clone player'),
+    'file' => 'simplevideo_ui.pages.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('simplevideo_ui_clone_form', 4),
+    'access arguments' => array('administer simplevideo'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+function simplevideo_ui_theme() {
+  return array(
+          'simplevideo_ui_preset_actions' => array(
+                  'arguments' => array(
+                          'form' => NULL,
+                  ),
+                  'file' => 'simplevideo_ui.pages.inc',
+          ),
+  );
+}
