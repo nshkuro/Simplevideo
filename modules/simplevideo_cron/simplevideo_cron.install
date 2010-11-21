@@ -3,7 +3,7 @@
 
 /**
  * @file
- * Install submodule simplevideo 
+ * Install submodule simplevideo for cron
  */
 /**
  * Implementation of hook_install()
