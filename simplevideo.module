@@ -543,14 +543,15 @@ function simplevideo_field_formatter_info() {
 }
 
 
-function theme_simplevideo_formatter_default($element) {
+function simplevideo_prepare_formatters($element) {
+  $result = array();  
   $item = $element['#item'];
-  //if (!empty($item['filename'])) {
   if (!empty($item['filepath'])) {
     $filepath = $item['filepath'];
     $formatter = $element['#formatter'];
     $settings = simplevideo_get_player_settings_by_machinename($formatter);
     $url = $settings['path'];
+    $result['url'] = $url;
     $options = $settings['options'];
     $number = simplevideo_get_number_thumb($options);
     $parameters = $settings['parameters'];
@@ -569,14 +570,22 @@ function theme_simplevideo_formatter_default($element) {
         $vars[$value['key']] = token_replace($replace, $type = 'simplevideo', $object, $leading = '[', $trailing = ']', $options = array());
       }
     }
-
+    $result['vars'] = $vars;
     foreach ($parameters as $value) {
       if (!empty($value['value']) && !empty($value['value'])) {
         $params[$value['key']] = $value['value'];
       }
     }
-    return theme("swfobject_api", $url, $params, $vars);
+    $result['params'] = $params;
+    return $result;
   }
+}
+function theme_simplevideo_formatter_default($element) {
+    $result = simplevideo_prepare_formatters($element);
+    $url = $result['url'];
+    $params = $result['params'];
+    $vars = $result['vars'];
+    return theme("swfobject_api", $url, $params, $vars);
 }
 
 /**
