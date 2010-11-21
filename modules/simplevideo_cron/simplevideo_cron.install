@@ -12,7 +12,7 @@ function simplevideo_cron_install() {
   drupal_install_schema('simplevideo_cron');
 }
 
-/**
+/**                
  * Implementation of hook_uninstall()
  */
 function simplevideo_cron_uninstall() {
