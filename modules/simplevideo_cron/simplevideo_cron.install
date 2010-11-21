@@ -1,4 +1,10 @@
 <?php
+// $Id$
+
+/**
+ * @file
+ * Install submodule simplevideo 
+ */
 /**
  * Implementation of hook_install()
  */

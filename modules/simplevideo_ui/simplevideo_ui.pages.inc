@@ -162,7 +162,7 @@ function simplevideo_ui_preset_delete_form($form_state, $arg = NULL) {
   t('This action cannot be undone.'), t('Delete'),  t('Cancel'));
 }
 
-function simplevideo_ui_preset_delete_form_submit($form, &$form_state){
+function simplevideo_ui_preset_delete_form_submit($form, &$form_state) {
   $presetid = $form_state['values']['presetid'];
   $form_state['redirect'] = 'admin/build/simplevideo';
   simplevideo_delete_preset($presetid);
@@ -332,7 +332,7 @@ function simplevideo_ui_encoding_form_validate($form, &$form_state) {
   $presetid = $form_state['values']['presetid'];
   $actionid = $form_state['values']['actionid'];
   // if Save
-  if(empty($actionid)){
+  if (empty($actionid)) {
     $result = db_query("SELECT actionid FROM {simplevideo_enc_action} WHERE presetid =%d", $presetid);
     while ($row = db_fetch_array($result)) {
       $actionid_enc[] = $row['actionid'];
@@ -364,7 +364,7 @@ function simplevideo_ui_encoding_form_submit($form, &$form_state) {
   $action['duration'] = $form_state['values']['duration'];
   $action = serialize($action);
   //save
-  if(empty($actionid)){
+  if (empty($actionid)) {
     simplevideo_enc_action_save($presetid, $action);
   }
   //update
@@ -440,8 +440,8 @@ function simplevideo_ui_thumbnails_form($form_state, $presetid = NULL, $actionid
 
 function simplevideo_ui_time_validate($form, &$form_state) {
   $element_validate = array('time', 'start_time', 'duration');
-  foreach($form_state['values'] as $key => $value){
-    if (array_search($key, $element_validate) && $value){
+  foreach ($form_state['values'] as $key => $value) {
+    if (array_search($key, $element_validate) && $value) {
       $regexp = ('/^([0-2]?(?<=[0-2]{1})[0-3]{1}|[0-2]? (?<=[0-1]{1})\d{1}):([0-5]{1}\d{1})(?:\:(?=\d{1})([0-5]{1}(?<=\d{1})\d{1}))?$/');
         if (!preg_match($regexp, $value, $matches)) {
           form_set_error($key, t('Enter time in format hh:mm:ss'));
@@ -466,7 +466,7 @@ function simplevideo_ui_thumbnails_form_submit($form, &$form_state) {
   $action['delay'] = $form_state['values']['delay'];
   $action = serialize($action);
   //save
-  if(empty($actionid)){
+  if (empty($actionid)) {
     simplevideo_thumb_action_save($presetid, $action);
   }
   //update
@@ -484,7 +484,7 @@ function simplevideo_ui_thumbnails_form_validate($form, &$form_state) {
     $height = $row['height'];
   }
   //if save
-  if(empty($actionid)){
+  if (empty($actionid)) {
     $result = db_query("SELECT actionid FROM {simplevideo_enc_action} WHERE presetid =%d", $presetid);
     while ($row = db_fetch_array($result)) {
       $actionid_enc[] = $row['actionid'];
@@ -724,7 +724,7 @@ function simplevideo_ui_players_form(&$form_state, $item = array(), $arg = NULL)
         $form['param']['param_wrapper']["inline_$i"]["key_$i"]['#default_value'] = $array[$i]['key'];
         $form['param']['param_wrapper']["inline_$i"]["value_$i"]['#default_value'] = $array[$i]['value'];
       }
-      if (empty($array[$i]['key']) || empty($array[$i]['value'])){
+      if (empty($array[$i]['key']) || empty($array[$i]['value'])) {
         $form['param']['param_wrapper']["inline_$i"]["key_$i"]['#default_value'] = $options[$i]['key'];
         $form['param']['param_wrapper']["inline_$i"]["value_$i"]['#default_value'] = $options[$i]['value'];
       }
@@ -859,7 +859,7 @@ function simplevideo_ui_players_overview() {
 function simplevideo_ui_alpha_numeric_validate($form, &$form_state) {
   $exclude = array('op', 'save', 'form_build_id', 'form_token', 'form_id', 'time', 'start_time', 'duration');
   foreach ($form_state['values'] as $key => $value) {
-    if(array_search($key, $exclude) === FALSE){
+    if (array_search($key, $exclude) === FALSE) {
       if (preg_match('/[^0-9a-zA-Z_\-]/', $value)) {
         form_set_error($key, t('Please only use alphanumeric characters, underscores (_), and hyphens (-)'));
       }
